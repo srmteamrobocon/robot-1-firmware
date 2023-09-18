@@ -7,7 +7,7 @@
 #define _CPU_STATS_ 0
 #define PPR 1300
 
-#define RPM_TIMER_INTERVAL_MS 50 // How frequently RPM should be calculated
+#define RPM_TIMER_INTERVAL_MS 20 // How frequently RPM should be calculated
 
 #define ENCODER_IN1 20
 #define ENCODER_IN2 21
@@ -51,8 +51,10 @@ bool TimerHandler_Calculate_RPM(struct repeating_timer *t) // If the timer callb
 {
   (void)t; // This line is used to suppress unused parameter warnings
 
-  RPM = ((encoder_ticks - previous_encoder_ticks) / PPR) * 60 * 1000 / RPM_TIMER_INTERVAL_MS;
-  previous_encoder_ticks = encoder_ticks;
+  int curent_ticks = encoder_ticks;
+  RPM = ((curent_ticks - previous_encoder_ticks) * 60 * 1000) / PPR / RPM_TIMER_INTERVAL_MS;
+  previous_encoder_ticks = curent_ticks;
+
   Serial.print("RPM = ");
   Serial.println(RPM);
   Serial.print("count = ");
