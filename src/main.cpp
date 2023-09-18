@@ -1,57 +1,75 @@
 #include <Arduino.h>
 #include <PID_v1.h>
-#include <RotaryEncoder.h>
 #include "RPi_Pico_TimerInterrupt.h"
 
 #define TIMER_INTERRUPT_DEBUG 1
 #define _TIMERINTERRUPT_LOGLEVEL_ 4
 #define _CPU_STATS_ 0
-#define TIMER_INTERVAL_MS 50 // How frequently RPM should be calculated
+#define PPR 1300
 
-#define PIN_IN1 20
-#define PIN_IN2 21
+#define RPM_TIMER_INTERVAL_MS 50 // How frequently RPM should be calculated
 
-double Setpoint, Input, Output;
+#define ENCODER_IN1 20
+#define ENCODER_IN2 21
+
+volatile long encoder_ticks = 0;          // Variable to store the encoder position
+volatile long previous_encoder_ticks = 0; // Variable to store the encoder position
+volatile long RPM = 0;                    // Variable to store the encoder position
+int last_A_state = LOW;                   // Assuming the initial state is LOW
 
 // Specify the links and initial tuning parameters
-
+double Setpoint, Input, Output;
 double Kp = 2, Ki = 5, Kd = 1;
-
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
-RotaryEncoder *encoder = nullptr;
 
-void checkPosition()
+void handleEncoder()
 {
-  encoder->tick();
+  // Read the current state of the encoder pins
+  int stateA = digitalRead(ENCODER_IN1);
+  int stateB = digitalRead(ENCODER_IN2);
+  // Determine the direction of rotation
+  if (stateA != last_A_state)
+  {
+
+    if (stateB != stateA)
+    {
+      encoder_ticks++; // Clockwise rotation
+    }
+    else
+    {
+      encoder_ticks--; // Counterclockwise rotation
+    }
+
+    // Print the current encoder position
+    last_A_state = stateA;
+    // Serial.println(encoder_ticks);
+  }
 }
 
+RPI_PICO_Timer ITimer(0);                                  // Create a single timer instance
 bool TimerHandler_Calculate_RPM(struct repeating_timer *t) // If the timer callback return false it will stop calling it self again
 {
   (void)t; // This line is used to suppress unused parameter warnings
 
-#if (TIMER_INTERRUPT_DEBUG > 0)
-  Serial.print("Timer: millis() = ");
-  Serial.println(millis()); // Just to check how accurate timer is
-#endif
-
-  // Print "Hello, world!" to the serial monitor
-  Serial.println("Hello, world!");
+  RPM = ((encoder_ticks - previous_encoder_ticks) / PPR) * 60 * 1000 / RPM_TIMER_INTERVAL_MS;
+  previous_encoder_ticks = encoder_ticks;
+  Serial.print("RPM = ");
+  Serial.println(RPM);
+  Serial.print("count = ");
+  Serial.println(encoder_ticks);
+  Serial.println("---");
 
   return true; // Countinously run
 }
 
-RPI_PICO_Timer ITimer(0); // Create a single timer instance
-
 void setup()
 {
   Serial.begin(115200);
+  pinMode(ENCODER_IN1, INPUT_PULLUP); // Set encoderPinA as input with pull-up resistor
+  pinMode(ENCODER_IN2, INPUT_PULLUP); // Set encoderPinB as input with pull-up resistor
 
-  Serial.println("InterruptRotator example for the RotaryEncoder library.");
-  encoder = new RotaryEncoder(PIN_IN1, PIN_IN2, RotaryEncoder::LatchMode::TWO03);
-
-  // register interrupt routine
-  attachInterrupt(digitalPinToInterrupt(PIN_IN1), checkPosition, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_IN2), checkPosition, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_IN1), handleEncoder, CHANGE); // Attach interrupt for encoderPinA
+  attachInterrupt(digitalPinToInterrupt(ENCODER_IN2), handleEncoder, CHANGE); // Attach interrupt for encoderPinB
 
 #if (_CPU_STATS_ > 0)
 
@@ -65,7 +83,7 @@ void setup()
 #endif
 
   // Attach the timer interrupt with a 50ms interval
-  if (ITimer.attachInterruptInterval(TIMER_INTERVAL_MS * 1000, TimerHandler_Calculate_RPM))
+  if (ITimer.attachInterruptInterval(RPM_TIMER_INTERVAL_MS * 1000, TimerHandler_Calculate_RPM))
   {
     // chat gpt print rpm here
     // Serial.println(millis());
@@ -76,49 +94,4 @@ void setup()
 
 void loop()
 {
-  static int pos = 0;
-
-  encoder->tick(); // just call tick() to check the state.
-
-  int newPos = encoder->getPosition();
-  if (pos != newPos)
-  {
-    Serial.print("pos:");
-    Serial.print(newPos * 2);
-    Serial.print(" dir:");
-    Serial.println((int)(encoder->getDirection()));
-    pos = newPos;
-  }
 }
-
-/*
-
-
-
-void setup()
-{
-
-  // Setpoint = 100;
-}
-
-void loop()
-{
-  } // if
-} // loop ()
-
-// To use other pins with Arduino UNO you can also use the ISR directly.
-// Here is some code for A2 and A3 using ATMega168 ff. specific registers.
-
-// Setup flags to activate the ISR PCINT1.
-// You may have to modify the next 2 lines if using other pins than A2 and A3
-//   PCICR |= (1 << PCIE1);    // This enables Pin Change Interrupt 1 that covers the Analog input pins or Port C.
-//   PCMSK1 |= (1 << PCINT10) | (1 << PCINT11);  // This enables the interrupt for pin 2 and 3 of Port C.
-
-// The Interrupt Service Routine for Pin Change Interrupt 1
-// This routine will only be called on any signal change on A2 and A3.
-// ISR(PCINT1_vect) {
-//   encoder->tick(); // just call tick() to check the state.
-// }
-
-// The End
-*/
