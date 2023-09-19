@@ -1,77 +1,72 @@
 #include <Arduino.h>
 #include <PID_v1.h>
 #include "RPi_Pico_TimerInterrupt.h"
+#include <RotaryEncoder.h>
 
 #define TIMER_INTERRUPT_DEBUG 1
 #define _TIMERINTERRUPT_LOGLEVEL_ 4
 #define _CPU_STATS_ 0
-#define PPR 1300
 
+//************************* Motor Encoder Constant ************************
+
+#define PPR 1300
 #define RPM_TIMER_INTERVAL_MS 20 // How frequently RPM should be calculated
 
 #define ENCODER_IN1 20
 #define ENCODER_IN2 21
 
-volatile long encoder_ticks = 0;          // Variable to store the encoder position
-volatile long previous_encoder_ticks = 0; // Variable to store the encoder position
-volatile long RPM = 0;                    // Variable to store the encoder position
-int last_A_state = LOW;                   // Assuming the initial state is LOW
+volatile long encoder_ticks = 0;
+volatile long previous_encoder_ticks = 0;
+volatile long RPM = 0;
 
-// Specify the links and initial tuning parameters
+RotaryEncoder *encoder = nullptr; // Damm a good methord to make instace var
+// Solves the OLED display error
+
+void checkPosition()
+{
+  encoder->tick(); // just call tick() to check the state.
+}
+
+//*************************************************************************
+
+//************************** PID Constants ********************************
+
 double Setpoint, Input, Output;
 double Kp = 2, Ki = 5, Kd = 1;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
-void handleEncoder()
-{
-  // Read the current state of the encoder pins
-  int stateA = digitalRead(ENCODER_IN1);
-  int stateB = digitalRead(ENCODER_IN2);
-  // Determine the direction of rotation
-  if (stateA != last_A_state)
-  {
+//*************************************************************************
 
-    if (stateB != stateA)
-    {
-      encoder_ticks++; // Clockwise rotation
-    }
-    else
-    {
-      encoder_ticks--; // Counterclockwise rotation
-    }
+//***************************** PICO timer ********************************
 
-    // Print the current encoder position
-    last_A_state = stateA;
-    // Serial.println(encoder_ticks);
-  }
-}
+RPI_PICO_Timer ITimer(0); // Create a single timer instance
 
-RPI_PICO_Timer ITimer(0);                                  // Create a single timer instance
-bool TimerHandler_Calculate_RPM(struct repeating_timer *t) // If the timer callback return false it will stop calling it self again
+// If the timer callback return false it will stop calling it self again
+bool TimerHandler_Calculate_RPM(struct repeating_timer *t)
 {
   (void)t; // This line is used to suppress unused parameter warnings
 
-  int curent_ticks = encoder_ticks;
+  long int curent_ticks = encoder->getPosition();
   RPM = ((curent_ticks - previous_encoder_ticks) * 60 * 1000) / PPR / RPM_TIMER_INTERVAL_MS;
   previous_encoder_ticks = curent_ticks;
 
   Serial.print("RPM = ");
   Serial.println(RPM);
   Serial.print("count = ");
-  Serial.println(encoder_ticks);
+  Serial.println(curent_ticks);
   Serial.println("---");
 
   return true; // Countinously run
 }
+//*************************************************************************
 
 void setup()
 {
   Serial.begin(115200);
-  pinMode(ENCODER_IN1, INPUT_PULLUP); // Set encoderPinA as input with pull-up resistor
-  pinMode(ENCODER_IN2, INPUT_PULLUP); // Set encoderPinB as input with pull-up resistor
 
-  attachInterrupt(digitalPinToInterrupt(ENCODER_IN1), handleEncoder, CHANGE); // Attach interrupt for encoderPinA
-  attachInterrupt(digitalPinToInterrupt(ENCODER_IN2), handleEncoder, CHANGE); // Attach interrupt for encoderPinB
+  encoder = new RotaryEncoder(ENCODER_IN1, ENCODER_IN2, RotaryEncoder::LatchMode::TWO03);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_IN1), checkPosition, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_IN2), checkPosition, CHANGE);
 
 #if (_CPU_STATS_ > 0)
 
@@ -96,4 +91,5 @@ void setup()
 
 void loop()
 {
+  encoder->tick(); // just call tick() to check the state.
 }
