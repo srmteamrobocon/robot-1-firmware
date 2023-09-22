@@ -12,10 +12,10 @@
 #define PPR 1300
 #define RPM_TIMER_INTERVAL_MS 20 // How frequently RPM should be calculated
 
-#define ENCODER_IN1 20
-#define ENCODER_IN2 21
+#define ENCODER_IN1 3
+#define ENCODER_IN2 2
 
-volatile long encoder_ticks = 0;
+volatile long int encoder_ticks = 0;
 volatile long previous_encoder_ticks = 0;
 volatile long RPM = 0;
 
@@ -32,7 +32,7 @@ void checkPosition()
 //************************** PID Constants ********************************
 
 double Setpoint, Input, Output;
-double Kp = 2, Ki = 5, Kd = 1;
+double Kp = 0.01, Ki = 0.001, Kd = 0.07;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 //*************************************************************************
@@ -47,14 +47,16 @@ bool TimerHandler_Calculate_RPM(struct repeating_timer *t)
   (void)t; // This line is used to suppress unused parameter warnings
 
   long int curent_ticks = encoder->getPosition();
+  encoder_ticks = curent_ticks;
+
   RPM = ((curent_ticks - previous_encoder_ticks) * 60 * 1000) / PPR / RPM_TIMER_INTERVAL_MS;
   previous_encoder_ticks = curent_ticks;
 
-  Serial.print("RPM = ");
-  Serial.println(RPM);
-  Serial.print("count = ");
-  Serial.println(curent_ticks);
-  Serial.println("---");
+  // Serial.print("RPM = ");
+  // Serial.println(RPM);
+  // Serial.print("count = ");
+  // Serial.println(curent_ticks);
+  // Serial.println("---");
 
   return true; // Countinously run
 }
@@ -87,9 +89,25 @@ void setup()
   }
   else
     Serial.println(F("Can't set Timer Callback. Select another Timer, freq. or timer"));
-}
 
+  Setpoint = 13000;
+  // turn the PID on
+  myPID.SetMode(AUTOMATIC);
+}
 void loop()
 {
   encoder->tick(); // just call tick() to check the state.
+  Input = encoder_ticks;
+  myPID.Compute();
+
+  analogWrite(4, Output);
+
+  Serial.print("Input = ");
+  Serial.println(Input);
+  Serial.print("Output = ");
+  Serial.println(Output);
+  Serial.print("Setpoint = ");
+  Serial.println(Setpoint);
+
+  delay(10);
 }
