@@ -60,26 +60,87 @@ public:
 
 //*************************************************************************
 
-Motor_cytron_md30c motor(3, 2);
+// Motor_cytron_md30c motor(3, 2);
+
+//************************* BTS motor Driver ******************************
+class BTS7890
+{
+private:
+  int _PWM_1;
+  int _PWM_2;
+
+public:
+  BTS7890(int PWM_1, int PWM_2)
+  {
+    /** Driver code for BTS790...  */
+
+    _PWM_1 = PWM_1;
+    _PWM_2 = PWM_2;
+
+    analogWrite(_PWM_1, 0);
+    analogWrite(_PWM_2, 0);
+  }
+  void setPWM(int pwm_value)
+  {
+    if (pwm_value > 0)
+    {
+      analogWrite(_PWM_1, 0); // Stop the other direction
+      analogWrite(_PWM_2, pwm_value);
+    }
+    else if (pwm_value < 0)
+    {
+      analogWrite(_PWM_1, -(pwm_value)); // Remove the negetive sign
+      analogWrite(_PWM_2, 0);
+    }
+    else
+    {
+      // If pwm is 0 turn on all low
+      analogWrite(_PWM_1, 0);
+      analogWrite(_PWM_2, 0);
+    }
+  }
+};
+
+//*************************************************************************
+
+BTS7890 motor_1(3, 2);
+BTS7890 motor_2(6, 7);
+BTS7890 motor_3(8, 9);
 
 //************************* Motor Encoder Constant ************************
 
 #define PPR 1300
 #define RPM_TIMER_INTERVAL_MS 20 // How frequently RPM should be calculated
 
-#define ENCODER_IN1 7
-#define ENCODER_IN2 6
+#define ENCODER_2_IN1 26
+#define ENCODER_2_IN2 22
+
+#define ENCODER_3_IN1 21
+#define ENCODER_3_IN2 20
+
+#define ENCODER_IN1 28
+#define ENCODER_IN2 27
 
 volatile long int encoder_ticks = 0;
 volatile long previous_encoder_ticks = 0;
 volatile long RPM = 0;
 
-RotaryEncoder *encoder = nullptr; // Damm a good methord to make instace var
+RotaryEncoder *encoder = nullptr;   // Damm a good methord to make instace var
+RotaryEncoder *encoder_2 = nullptr; // Damm a good methord to make instace var
+RotaryEncoder *encoder_3 = nullptr; // Damm a good methord to make instace var
 // Solves the OLED display error
 
 void checkPosition()
 {
   encoder->tick(); // just call tick() to check the state.
+}
+void checkPosition_2()
+{
+  encoder_2->tick(); // just call tick() to check the state.
+}
+void checkPosition_3()
+{
+  encoder_3->tick(); // just call tick() to check the state.
 }
 
 //*************************************************************************
@@ -102,6 +163,15 @@ bool TimerHandler_Calculate_RPM(struct repeating_timer *t)
   (void)t; // This line is used to suppress unused parameter warnings
 
   long int curent_ticks = encoder->getPosition();
+  long int curent_ticks_2 = encoder_2->getPosition();
+  long int curent_ticks_3 = encoder_3->getPosition();
+
+  Serial.print(curent_ticks);
+  Serial.print(" ");
+  Serial.print(curent_ticks_2);
+  Serial.print(" ");
+  Serial.println(curent_ticks_3);
+
   encoder_ticks = curent_ticks;
 
   RPM = ((curent_ticks - previous_encoder_ticks) * 60 * 1000) / PPR / RPM_TIMER_INTERVAL_MS;
@@ -119,6 +189,14 @@ void setup()
   encoder = new RotaryEncoder(ENCODER_IN1, ENCODER_IN2, RotaryEncoder::LatchMode::TWO03);
   attachInterrupt(digitalPinToInterrupt(ENCODER_IN1), checkPosition, CHANGE);
   attachInterrupt(digitalPinToInterrupt(ENCODER_IN2), checkPosition, CHANGE);
+
+  encoder_2 = new RotaryEncoder(ENCODER_2_IN1, ENCODER_2_IN2, RotaryEncoder::LatchMode::TWO03);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_2_IN1), checkPosition_2, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_2_IN2), checkPosition_2, CHANGE);
+
+  encoder_3 = new RotaryEncoder(ENCODER_3_IN1, ENCODER_3_IN2, RotaryEncoder::LatchMode::TWO03);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_3_IN1), checkPosition_3, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_3_IN2), checkPosition_3, CHANGE);
 
   // turn the PID on
   myPID.SetMode(AUTOMATIC);
@@ -174,6 +252,7 @@ void loop()
 
   // just call tick() to check the state.
   encoder->tick();
+  encoder_2->tick();
 
   if (Serial.available() > 0)
   {
@@ -191,10 +270,13 @@ void loop()
         DATA[i] = '\0';
     }
   }
-  motor.setPWM(DriveData.motor_1 / 4);
-  Serial.println("Encoder Ticks");
-  Serial.println(encoder_ticks);
-  Serial.println("---");
+  motor_1.setPWM(DriveData.motor_1 / 4);
+  motor_2.setPWM(DriveData.motor_2 / 4);
+  motor_3.setPWM(DriveData.motor_3 / 4);
+
+  // Serial.println("Encoder Ticks");
+  // Serial.println(encoder_ticks);
+  // Serial.println("---");
 }
 
 void print_data()
