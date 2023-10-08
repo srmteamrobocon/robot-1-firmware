@@ -145,6 +145,8 @@ void loop()
   // motor_1.setPWM(DriveData.motor_1 / 4);
   // motor_2.setPWM(DriveData.motor_2 / 4);
   // motor_3.setPWM(DriveData.motor_3 / 4);
+  Serial.println("Hello robocon");
+  delay(100);
 #if (_LOG_MOTOR_PWM_)
   Serial.println(DriveData.motor_1);
   Serial.println(DriveData.motor_2);
